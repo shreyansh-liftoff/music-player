@@ -6,112 +6,90 @@
  */
 
 import React from 'react';
-import type {PropsWithChildren} from 'react';
-import {
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
-} from 'react-native';
-
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
-
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
-
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
-  );
-}
+import {SafeAreaView, ScrollView, StyleSheet, View} from 'react-native';
+import useColorScheme from './hooks/useColorScheme';
+import PlayerControls from './components/audio-player-controls/playerControls';
+import AudioPlayerMedia from './components/audio-player-media';
+import AudioPlayerContent from './components/audio-player-content';
+import {Text} from 'react-native';
+import {mockAudioContent, mockTrackInfo} from './data/mockData';
+import usePlayer from './hooks/usePlayer';
+import AudioPlayerDuration from './components/audio-player-duration';
 
 function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
+  const {backgroundStyle} = useColorScheme();
+  const {
+    playSound,
+    pauseSound,
+    isPlaying,
+    isLoading,
+    totalDuration,
+    progress,
+    elapsedTime,
+    onSeekForward,
+    onSeekBackward,
+  } = usePlayer({
+    sourceUrl:
+      'https://commondatastorage.googleapis.com/codeskulptor-demos/DDR_assets/Kangaroo_MusiQue_-_The_Neverwritten_Role_Playing_Game.mp3',
+    autoPlay: false,
+    trackInfo: mockTrackInfo,
+  });
 
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
+  const onPlay = () => {
+    playSound();
   };
+
+  const onPause = () => {
+    pauseSound();
+  };
+
+  const MockContent = (
+    <View style={styles.mockContent}>
+      <Text style={styles.mockContentTitle}>{mockAudioContent.title}</Text>
+      <Text style={styles.mockContentArtist}>{mockAudioContent.artist}</Text>
+    </View>
+  );
 
   return (
     <SafeAreaView style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
-      />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={backgroundStyle}>
-        <Header />
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
+      <ScrollView>
+        <AudioPlayerMedia
+          thumbnail={require('./assets/images/sample-image.jpg')}
+        />
+        <AudioPlayerContent content={MockContent} />
+        <AudioPlayerDuration
+          totalDuration={totalDuration}
+          currentDuration={elapsedTime}
+          progress={progress}
+        />
+        <PlayerControls
+          isPlaying={isPlaying}
+          onPlay={onPlay}
+          onPause={onPause}
+          isLoading={isLoading}
+          onSeekForward={onSeekForward}
+          onSeekBackward={onSeekBackward}
+        />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
+  mockContent: {
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    textAlign: 'center',
   },
-  sectionTitle: {
+  mockContentTitle: {
     fontSize: 24,
-    fontWeight: '600',
+    marginVertical: 5,
+    fontWeight: 'bold',
   },
-  sectionDescription: {
-    marginTop: 8,
+  mockContentArtist: {
     fontSize: 18,
-    fontWeight: '400',
-  },
-  highlight: {
-    fontWeight: '700',
+    marginVertical: 5,
   },
 });
 
