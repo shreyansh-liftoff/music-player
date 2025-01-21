@@ -1,22 +1,35 @@
+//
+//  AudioModule.m
+//  MusicPlayer
+//
+//  Created by Liftoff on 20/01/25.
+//
+
+#import <Foundation/Foundation.h>
 #import <React/RCTBridgeModule.h>
 #import <React/RCTEventEmitter.h>
 
 @interface RCT_EXTERN_MODULE(AudioModule, NSObject)
+// Expose the methods to React Native using RCT_EXTERN_METHOD
 
-RCT_EXTERN_METHOD(getTotalDuration:(NSString *)filePath callback:(RCTResponseSenderBlock)callback)
+RCT_EXTERN_METHOD(downloadAndPlayAudio:(NSURL *)remoteURL
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject);
 
-RCT_EXTERN_METHOD(play:(NSString *)filePath resolver:(RCTPromiseResolveBlock)resolver rejecter:(RCTPromiseRejectBlock)rejecter)
+RCT_EXTERN_METHOD(pauseAudio);
 
-RCT_EXTERN_METHOD(pause)
+RCT_EXTERN_METHOD(stopAudio);
 
-RCT_EXTERN_METHOD(stop)
+RCT_EXTERN_METHOD(seek:(double)timeInSeconds);
 
-RCT_EXTERN_METHOD(seek:(double)interval resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(getTotalDuration:(NSURL *)remoteURL
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject);
 
-RCT_EXTERN_METHOD(startTracking)
-
-RCT_EXTERN_METHOD(stopTracking)
-
-RCT_EXTERN_METHOD(setMediaPlayerInfo:(NSString *)title artist:(NSString *)artist imageURL:(nullable NSString *)imageURL)
+// Required for RCT_EXTERN_MODULE
++ (BOOL)requiresMainQueueSetup
+{
+    return YES; // If your module does not need to run on the main thread
+}
 
 @end

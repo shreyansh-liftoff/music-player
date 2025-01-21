@@ -1,7 +1,7 @@
 import {useCallback, useEffect, useMemo, useState} from 'react';
 import {NativeEventEmitter, NativeModules} from 'react-native';
 
-const {AudioModule} = NativeModules;
+const {AudioModule, MediaPlayerModule, AudioEventModule} = NativeModules;
 
 export interface PlayerProps {
   sourceUrl?: string;
@@ -14,25 +14,37 @@ export interface PlayerProps {
     title: string;
     artist: string;
     artwork?: string;
-  }
+  };
 }
 
-const usePlayer = ({sourceUrl, seekInterval = 5, trackInfo, autoPlay = false}: PlayerProps) => {
+const usePlayer = ({
+  sourceUrl,
+  seekInterval = 5,
+  trackInfo,
+  autoPlay = false,
+}: PlayerProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [totalDuration, setTotalDuration] = useState(0);
-  const eventHandler = useMemo(() => new NativeEventEmitter(AudioModule), []);
+  const eventHandler = useMemo(
+    () => new NativeEventEmitter(AudioEventModule),
+    [],
+  );
   const [currentProgress, setCurrentProgress] = useState(0);
   const [elapsedTime, setCurrentTime] = useState(0);
 
-  const setTrackInfo = useCallback(async() => {
+  const setTrackInfo = useCallback(async () => {
     try {
-      await AudioModule.setMediaPlayerInfo(trackInfo?.title, trackInfo?.artist, trackInfo?.artwork);
+      await MediaPlayerModule.setMediaPlayerInfo(
+        sourceUrl,
+        trackInfo?.title,
+        trackInfo?.artist,
+        trackInfo?.artwork,
+      );
     } catch (error) {
       console.error('Error setting track info', error);
     }
-  }, [trackInfo]);
-
+  }, [sourceUrl, trackInfo?.artist, trackInfo?.artwork, trackInfo?.title]);
 
   useEffect(() => {
     if (currentProgress === 100) {
@@ -43,11 +55,12 @@ const usePlayer = ({sourceUrl, seekInterval = 5, trackInfo, autoPlay = false}: P
 
   useEffect(() => {
     const progressEventHandler = eventHandler.addListener(
-      'onProgressUpdate',
+      'onAudioProgress',
       (event: any) => {
+        console.log('Progress event', event);
         const {currentTime, progress} = event;
         setCurrentTime(currentTime);
-        setCurrentProgress(progress);
+        setCurrentProgress(progress * 100);
       },
     );
 
@@ -56,17 +69,23 @@ const usePlayer = ({sourceUrl, seekInterval = 5, trackInfo, autoPlay = false}: P
     };
   }, [eventHandler]);
 
+  useEffect(() => {
+    const stateEventHandler = eventHandler.addListener(
+      'onAudioStateChange',
+      (event: any) => {
+        console.log('event', event);
+      },
+    );
+
+    return () => {
+      stateEventHandler.remove();
+    };
+  }, [eventHandler]);
+
   const getDuration = useCallback(async () => {
     try {
-      const duration: number = await new Promise((resolve, reject) => {
-        AudioModule.getTotalDuration(sourceUrl, (result: any) => {
-          if (result) {
-            resolve(result); // Assuming result is an array with the duration at index 0
-          } else {
-            reject(new Error('Failed to fetch duration.'));
-          }
-        });
-      });
+      const duration: number = await AudioModule.getTotalDuration(sourceUrl);
+      console.log('Duration', duration);
       setTotalDuration(duration);
     } catch (error) {
       console.error('Error getting duration', error);
@@ -76,36 +95,43 @@ const usePlayer = ({sourceUrl, seekInterval = 5, trackInfo, autoPlay = false}: P
   const playSound = useCallback(async () => {
     try {
       setIsLoading(true);
-      await AudioModule.play(sourceUrl);
+      await AudioModule.downloadAndPlayAudio(sourceUrl);
       setIsPlaying(true);
+      if (trackInfo) {
+        setTrackInfo();
+      }
     } catch (error) {
       console.error('Error playing sound', error);
     } finally {
       setIsLoading(false);
     }
-  }, [sourceUrl]);
+  }, [setTrackInfo, sourceUrl, trackInfo]);
 
   const pauseSound = () => {
-    AudioModule.pause();
+    AudioModule.pauseAudio();
     setIsPlaying(false);
   };
 
   const stopSound = () => {
-    AudioModule.stop();
+    AudioModule.stopAudio();
     setIsPlaying(false);
   };
 
-  const onSeekForward = async() => {
+  const onSeekForward = async () => {
     try {
-      await AudioModule.seek(seekInterval);
+      const seekTo = elapsedTime + seekInterval > totalDuration ? totalDuration : elapsedTime + seekInterval;
+      console.log('Seeking forward to', seekTo);
+      await AudioModule.seek(seekTo);
     } catch (error) {
       console.error('Error seeking forward', error);
     }
   };
 
-  const onSeekBackward = async() => {
+  const onSeekBackward = async () => {
     try {
-      await AudioModule.seek(-seekInterval);
+      const seekTo = elapsedTime - seekInterval < 0 ? 0 : elapsedTime - seekInterval;
+      console.log('Seeking backward to', seekTo);
+      await AudioModule.seek(seekTo);
     } catch (error) {
       console.error('Error seeking backward', error);
     }
@@ -116,12 +142,6 @@ const usePlayer = ({sourceUrl, seekInterval = 5, trackInfo, autoPlay = false}: P
       playSound();
     }
   }, [autoPlay, playSound]);
-
-  useEffect(() => {
-    if (trackInfo && totalDuration) {
-      setTrackInfo();
-    }
-  }, [trackInfo, setTrackInfo, totalDuration]);
 
   useEffect(() => {
     getDuration();
