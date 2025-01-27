@@ -1,7 +1,7 @@
 import {useCallback, useEffect, useMemo, useState} from 'react';
-import {NativeEventEmitter, NativeModules} from 'react-native';
+import {DeviceEventEmitter, NativeEventEmitter, NativeModules, Platform} from 'react-native';
 
-const {AudioModule, MediaPlayerModule, AudioEventModule} = NativeModules;
+const {AudioModule, AudioEventModule} = NativeModules;
 
 export interface PlayerProps {
   sourceUrl?: string;
@@ -13,6 +13,7 @@ export interface PlayerProps {
   trackInfo?: {
     title: string;
     artist: string;
+    album?: string;
     artwork?: string;
   };
 }
@@ -26,25 +27,13 @@ const usePlayer = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [totalDuration, setTotalDuration] = useState(0);
+  const platform = Platform.OS;
   const eventHandler = useMemo(
-    () => new NativeEventEmitter(AudioEventModule),
-    [],
+    () => platform === 'android' ? DeviceEventEmitter :  new NativeEventEmitter(AudioEventModule),
+    [platform],
   );
   const [currentProgress, setCurrentProgress] = useState(0);
   const [elapsedTime, setCurrentTime] = useState(0);
-
-  const setTrackInfo = useCallback(async () => {
-    try {
-      await MediaPlayerModule.setMediaPlayerInfo(
-        sourceUrl,
-        trackInfo?.title,
-        trackInfo?.artist,
-        trackInfo?.artwork,
-      );
-    } catch (error) {
-      console.error('Error setting track info', error);
-    }
-  }, [sourceUrl, trackInfo?.artist, trackInfo?.artwork, trackInfo?.title]);
 
   useEffect(() => {
     if (currentProgress === 100) {
@@ -73,7 +62,8 @@ const usePlayer = ({
     const stateEventHandler = eventHandler.addListener(
       'onAudioStateChange',
       (event: any) => {
-        console.log('event', event);
+        const {state} = event;
+        setIsPlaying(state === 'PLAYING');
       },
     );
 
@@ -95,17 +85,14 @@ const usePlayer = ({
   const playSound = useCallback(async () => {
     try {
       setIsLoading(true);
-      await AudioModule.downloadAndPlayAudio(sourceUrl);
+      await AudioModule?.[platform === 'android' ? 'playAudio' : 'downloadAndPlayAudio'](sourceUrl, trackInfo);
       setIsPlaying(true);
-      if (trackInfo) {
-        setTrackInfo();
-      }
     } catch (error) {
       console.error('Error playing sound', error);
     } finally {
       setIsLoading(false);
     }
-  }, [setTrackInfo, sourceUrl, trackInfo]);
+  }, [platform, sourceUrl, trackInfo]);
 
   const pauseSound = () => {
     AudioModule.pauseAudio();

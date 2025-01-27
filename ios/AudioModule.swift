@@ -8,6 +8,8 @@
 import AVFoundation
 import Foundation
 import React
+import MediaPlayer
+import UIKit
 
 @objc(AudioModule)
 class AudioModule: NSObject, AVAudioPlayerDelegate {
@@ -16,11 +18,13 @@ class AudioModule: NSObject, AVAudioPlayerDelegate {
     private var isPlaying = false
     private var progressTimer: Timer?
     private var currentPlaybackPosition: TimeInterval = 0.0
+    private var audioURL: URL?
   
     private func setUpSession() {
         do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, options: [])
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
             try AVAudioSession.sharedInstance().setActive(true)
+            UIApplication.shared.beginReceivingRemoteControlEvents()
         } catch {
             print(error)
         }
@@ -31,7 +35,6 @@ class AudioModule: NSObject, AVAudioPlayerDelegate {
         self.audioPlayer = audioPlayer
         self.isPlaying = isPlaying
         self.progressTimer = progressTimer
-        self.setUpSession()
     }
     // Default initializer
     override init() {
@@ -40,6 +43,28 @@ class AudioModule: NSObject, AVAudioPlayerDelegate {
     }
 
     // MARK: - Public Methods
+  
+    // Set Media Player Info
+    @objc func setMediaPlayerInfo(_ title: String, artist: String, album: String, duration: String) {
+      let nowPlayingInfo: [String: Any] = [
+          MPMediaItemPropertyTitle: title,
+          MPMediaItemPropertyArtist: artist,
+          MPMediaItemPropertyAlbumTitle: album,
+          MPMediaItemPropertyPlaybackDuration: duration,
+          MPNowPlayingInfoPropertyPlaybackRate: 1.0,
+          MPNowPlayingInfoPropertyElapsedPlaybackTime: 0.0
+      ]
+      
+      // If you have artwork, you can add it here
+      // if let artwork = MPMediaItemArtwork(/* your artwork here */) {
+      //     nowPlayingInfo[MPMediaItemPropertyArtwork] = artwork
+      // }
+      
+      // Log the nowPlayingInfo dictionary
+      os_log("Now Playing Info: %{public}@", log: OSLog.default, type: .info, nowPlayingInfo.description)
+      
+      MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
+    }
 
     @objc func downloadAndPlayAudio(
         _ remoteURL: URL, resolver: @escaping RCTPromiseResolveBlock,
@@ -50,6 +75,7 @@ class AudioModule: NSObject, AVAudioPlayerDelegate {
             switch result {
             case .success(let localURL):
                 // Play audio from local URL
+                self?.audioURL = localURL
                 self?.playAudio(from: localURL)
                 resolver(localURL)
             case .failure(let error):
@@ -58,7 +84,7 @@ class AudioModule: NSObject, AVAudioPlayerDelegate {
         }
     }
 
-    func playAudio(from url: URL) {
+  @objc func playAudio(from url: URL) {
         do {
             if let player = audioPlayer {
                 player.pause()  // Pause existing player if any
@@ -75,6 +101,8 @@ class AudioModule: NSObject, AVAudioPlayerDelegate {
             AudioEventModule.shared?.emitStateChange(state: "playing")
             // Start sending progress updates
             startProgressUpdates()
+            // Setup remote media controls
+            setupMediaPlayerNotificationView()
         } catch {
             os_log(
                 "Error initializing audio player: %{public}@", log: OSLog.default, type: .error,
@@ -169,6 +197,32 @@ class AudioModule: NSObject, AVAudioPlayerDelegate {
                 AudioEventModule.shared?.emitStateChange(state: "error", message: error.localizedDescription)
         }
     }
+  
+  // Setup remote media controls (for play, pause, skip)
+  private func setupMediaPlayerNotificationView() {
+      let commandCenter = MPRemoteCommandCenter.shared()
+    
+      // Play command
+      commandCenter.playCommand.isEnabled = true
+      commandCenter.playCommand.addTarget { [weak self] event in
+          self?.playAudio(from: self!.audioURL!)
+          return .success
+      }
+    
+      // Pause command
+      commandCenter.pauseCommand.isEnabled = true
+      commandCenter.pauseCommand.addTarget { [weak self] event in
+          self?.pauseAudio()
+          return .success
+      }
+    
+      // Stop command
+      commandCenter.stopCommand.isEnabled = true
+      commandCenter.stopCommand.addTarget { [weak self] event in
+          self?.stopAudio()
+          return .success
+      }
+  }
 
     // MARK: - Observing Audio Progress
 

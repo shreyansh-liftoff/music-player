@@ -7,5 +7,6 @@ export const mockAudioContent = {
 export const mockTrackInfo = {
     title: 'Audio Title',
     artist: 'Audio Singer',
+    album: 'Audio Album',
     artwork: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQAu2qz2_GGhotIzQJvsAY-GHK6NRmZzDDWCw&s',
 };

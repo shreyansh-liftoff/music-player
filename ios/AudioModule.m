@@ -12,6 +12,8 @@
 @interface RCT_EXTERN_MODULE(AudioModule, NSObject)
 // Expose the methods to React Native using RCT_EXTERN_METHOD
 
+RCT_EXTERN_METHOD(setMediaPlayerInfo:(NSString *)title artist:(NSString *)artist album:(NSString *)album duration:(nonnull NSString *)duration)
+
 RCT_EXTERN_METHOD(downloadAndPlayAudio:(NSURL *)remoteURL
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject);
