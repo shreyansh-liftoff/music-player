@@ -77,7 +77,7 @@ class AudioModule: NSObject, AVAudioPlayerDelegate {
                 // Play audio from local URL
                 self?.audioURL = localURL
                 self?.playAudio(from: localURL)
-                resolver(localURL)
+                resolver(localURL.absoluteString)
             case .failure(let error):
                 rejecter("DOWNLOAD_ERROR", "Failed to download audio", error)
             }

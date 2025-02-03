@@ -104,6 +104,14 @@ const usePlayer = ({
     setIsPlaying(false);
   };
 
+  const seek = async (seekTo: number) => {
+    try {
+      await AudioModule.seek(seekTo);
+    } catch (error) {
+      console.error('Error seeking', error);
+    }
+  };
+
   const onSeekForward = async () => {
     try {
       const seekTo = elapsedTime + seekInterval > totalDuration ? totalDuration : elapsedTime + seekInterval;
@@ -145,6 +153,7 @@ const usePlayer = ({
     elapsedTime,
     onSeekForward,
     onSeekBackward,
+    seek,
   };
 };
 
