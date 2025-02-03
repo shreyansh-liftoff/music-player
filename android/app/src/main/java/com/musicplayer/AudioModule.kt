@@ -80,6 +80,7 @@ class AudioModule(reactContext: ReactApplicationContext) :
                                     .build()
 
                     exoPlayer.setMediaItem(mediaItem)
+                    exoPlayer.setMediaItem(mediaItem)
                     exoPlayer.prepare()
                     audioURL = url
                     exoPlayer.seekTo(currentPlaybackPosition.toLong())
@@ -105,9 +106,6 @@ class AudioModule(reactContext: ReactApplicationContext) :
                         object : Player.Listener {
                             override fun onPlaybackStateChanged(state: Int) {
                                 if (state == Player.STATE_READY) {
-                                    // Get the duration of the media item
-                                    val duration = exoPlayer.duration
-
                                     // Start the PlaybackService
                                     Log.d("AudioModule", "Starting playback service")
                                     val serviceIntent =
@@ -121,7 +119,6 @@ class AudioModule(reactContext: ReactApplicationContext) :
                                                         putExtra("TITLE", title)
                                                         putExtra("ARTIST", artist)
                                                         putExtra("ALBUM", album)
-                                                        putExtra("DURATION", duration)
                                                     }
                                     reactApplicationContext.startService(serviceIntent)
                                     Log.d("AudioModule", "Playback service started")
@@ -144,8 +141,6 @@ class AudioModule(reactContext: ReactApplicationContext) :
                 exoPlayer.pause()
                 isPlaying = false
                 currentPlaybackPosition = exoPlayer.currentPosition.toInt()
-                // stopProgressUpdates()
-                // AudioEventModule.sharedInstance(reactApplicationContext).emitStateChange("PAUSED")
             } catch (e: Exception) {
                 print("ERROR Failed to pause audio")
             }
@@ -163,8 +158,6 @@ class AudioModule(reactContext: ReactApplicationContext) :
                 // Stop the PlaybackService
                 val serviceIntent = Intent(reactApplicationContext, PlaybackService::class.java)
                 reactApplicationContext.stopService(serviceIntent)
-                // stopProgressUpdates()
-                // AudioEventModule.sharedInstance(reactApplicationContext).emitStateChange("STOPPED")
             } catch (e: Exception) {
                 print("ERROR Failed to stop audio")
             }
@@ -222,6 +215,14 @@ class AudioModule(reactContext: ReactApplicationContext) :
                 isPlaying = false
                 stopProgressUpdates()
                 AudioEventModule.sharedInstance(reactApplicationContext).emitStateChange("STOPPED")
+            }
+
+            Player.STATE_BUFFERING -> {
+                Log.d("AudioModule", "Player is buffering")
+            }
+
+            Player.STATE_READY -> {
+                Log.d("AudioModule", "Player is ready")
             }
         }
     }

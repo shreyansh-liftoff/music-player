@@ -1,28 +1,30 @@
-package com.musicplayer
+@file:UnstableApi package com.musicplayer
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
+import android.annotation.SuppressLint
 import android.app.PendingIntent
-import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import androidx.annotation.OptIn
-import androidx.core.app.NotificationCompat
+import androidx.annotation.RequiresApi
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.CommandButton
+import androidx.media3.session.DefaultMediaNotificationProvider
+import androidx.media3.session.MediaNotification
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
-import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.SessionCommand
-import androidx.media3.session.CommandButton
-import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.SessionCommands
 import androidx.media3.session.SessionResult
-import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
-import com.musicplayer.ExoPlayerSingleton
+import com.google.common.util.concurrent.ListenableFuture
+
 
 class PlaybackService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
@@ -37,33 +39,51 @@ class PlaybackService : MediaSessionService() {
 
     private val playPauseButton = CommandButton.Builder()
         .setDisplayName("Play/Pause")
+        .setIconResId(R.drawable.ic_play)
         .setSessionCommand(customCommandPlayPause)
         .build()
 
     private val nextButton = CommandButton.Builder()
         .setDisplayName("Next")
+        .setIconResId(R.drawable.ic_next)
         .setSessionCommand(customCommandNext)
         .build()
 
     private val previousButton = CommandButton.Builder()
         .setDisplayName("Previous")
+        .setIconResId(R.drawable.ic_prev)
         .setSessionCommand(customCommandPrevious)
         .build()
 
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
+    @RequiresApi(Build.VERSION_CODES.O)
     @OptIn(UnstableApi::class) override fun onCreate() {
         super.onCreate()
         exoPlayer = ExoPlayerSingleton.getInstance(applicationContext)
         Log.d("PlaybackService", exoPlayer.toString())
-        val player = exoPlayer
-        createNotificationChannel()
-        // Build the session with the custom layout and control buttons
-        mediaSession = MediaSession.Builder(this, player)
-            .setCallback(MyCallback())
-            .setMediaButtonPreferences(listOf(playPauseButton, nextButton, previousButton))
+        val mediaNotificationProvider = DefaultMediaNotificationProvider.Builder(this)
+
             .build()
+        // Build the session with the custom layout and control buttons
+        mediaSession = MediaSession.Builder(this, exoPlayer)
+            .setCallback(MyCallback())
+            .setCustomLayout(ImmutableList.of(playPauseButton, nextButton, previousButton))
+            .setMediaButtonPreferences(listOf(previousButton, playPauseButton, nextButton))
+            .setMediaNotificationProvider(CustomMediaNotificationProvider(this, mediaSession!!))
+            .setSessionActivity(
+                PendingIntent.getActivity(
+                    this,
+                    0,
+                    Intent(this, MainActivity::class.java),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+            )
+            .build()
+
         Log.d("PlaybackService", mediaSession.toString())
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
         intent?.toString()?.let { Log.d("PlaybackService", it) }
@@ -72,29 +92,40 @@ class PlaybackService : MediaSessionService() {
                 val title = intent.getStringExtra("TITLE")
                 val artist = intent.getStringExtra("ARTIST")
                 val album = intent.getStringExtra("ALBUM")
-                val duration = intent.getLongExtra("DURATION", 0)
-                startForeground(notificationId, createMediaStyleNotification(title, artist, album, duration))
+                startForeground(
+                    notificationId,
+                    mediaPlayerNotification.createNotification(
+
+                        title,
+                        artist,
+                        album
+                    )
+                )
                 handler.post(updateNotificationRunnable)
             }
+
         }
         return START_STICKY
     }
 
     private inner class MyCallback : MediaSession.Callback {
-        @OptIn(UnstableApi::class) override fun onConnect(
+        @OptIn(UnstableApi::class)
+        override fun onConnect(
             session: MediaSession,
             controller: MediaSession.ControllerInfo
         ): MediaSession.ConnectionResult {
-            Log.d("PlaybackService", session.toString())
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailablePlayerCommands(
-                    MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS.buildUpon()
-                        .remove(Player.COMMAND_SEEK_TO_NEXT)
-                        .remove(Player.COMMAND_SEEK_TO_PREVIOUS)
+                    Player.Commands.Builder()
+                        .add(Player.COMMAND_PLAY_PAUSE)
+                        .add(Player.COMMAND_SEEK_TO_NEXT)
+                        .add(Player.COMMAND_SEEK_TO_PREVIOUS)
+                        .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+                        .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
                         .build()
                 )
                 .setAvailableSessionCommands(
-                    MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+                    SessionCommands.Builder()
                         .add(customCommandPlayPause)
                         .add(customCommandNext)
                         .add(customCommandPrevious)
@@ -102,7 +133,7 @@ class PlaybackService : MediaSessionService() {
                         .build()
                 )
                 .build()
-    }
+        }
 
         override fun onCustomCommand(
             session: MediaSession,
@@ -112,7 +143,7 @@ class PlaybackService : MediaSessionService() {
         ): ListenableFuture<SessionResult> {
             return when (customCommand.customAction) {
                 "PLAY_PAUSE" -> {
-                    if (exoPlayer.isPlaying == true) {
+                    if (exoPlayer.isPlaying) {
                         exoPlayer.pause()
     
                     } else {
@@ -149,83 +180,13 @@ class PlaybackService : MediaSessionService() {
         return mediaSession
     }
 
-    @OptIn(UnstableApi::class) private fun createMediaStyleNotification(title: String?, artist: String?, album: String?, duration: Long): Notification {
-        val playPauseIntent = createPendingIntent("PLAY_PAUSE")
-        val nextIntent = createPendingIntent("NEXT")
-        val previousIntent = createPendingIntent("PREVIOUS")
-
-        val currentPosition = exoPlayer.currentPosition
-        val progress = if (duration > 0) (currentPosition * 100 / duration).toInt() else 0
-
-        return NotificationCompat.Builder(this, notificationChannelId)
-            .setContentTitle(title)
-            .setContentText(artist)
-            .setSubText(album)
-            .setSmallIcon(R.drawable.ic_music_note)
-            .setProgress(100, progress, false)
-            .addAction(
-                R.drawable.ic_stop,
-                "Previous",
-                previousIntent
-            )
-            .addAction(
-                if (exoPlayer.isPlaying == true) R.drawable.ic_pause else R.drawable.ic_play,
-                if (exoPlayer.isPlaying == true) "Pause" else "Play",
-                playPauseIntent
-            )
-            .addAction(
-                R.drawable.ic_stop,
-                "Next",
-                nextIntent
-            )
-            .setStyle(
-                androidx.media.app.NotificationCompat.MediaStyle()
-                    .setMediaSession(mediaSession?.sessionCompatToken)
-                    .setShowActionsInCompactView(0, 1, 2) // Compact view with all controls
-            )
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setOngoing(true) // Sticky notification
-            .build()
-    }
-
-    private fun updateNotification(title: String?, artist: String?, album: String?, duration: Long) {
-        val notificationManager =
-            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(notificationId, createMediaStyleNotification(title, artist, album, duration))
-    }
-
-    private fun createNotificationChannel() {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                notificationChannelId,
-                "Playback Notifications",
-                NotificationManager.IMPORTANCE_LOW
-            )
-            channel.description = "Notifications for playback controls"
-            val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(channel)
-        }
-    }
-
-    private fun createPendingIntent(action: String): PendingIntent {
-        val intent = Intent(this, PlaybackService::class.java).apply {
-            this.action = action
-        }
-        return PendingIntent.getService(
-            this,
-            action.hashCode(),
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-    }
-
     private val updateNotificationRunnable = object : Runnable {
+        @RequiresApi(Build.VERSION_CODES.O)
         override fun run() {
             val title = exoPlayer.mediaMetadata.title?.toString()
             val artist = exoPlayer.mediaMetadata.artist?.toString()
             val album = exoPlayer.mediaMetadata.albumTitle?.toString()
-            val duration = exoPlayer.duration
-            updateNotification(title, artist, album, duration)
+            mediaPlayerNotification.createNotification(title, artist, album)
             handler.postDelayed(this, 1000) // Update every second
         }
     }
